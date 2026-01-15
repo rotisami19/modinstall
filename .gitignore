@@ -1,0 +1,24 @@
+# Gradle files
+.gradle/
+build/
+dist/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+
+# Eclipse
+.classpath
+.project
+.settings/
+
+# VS Code
+.vscode/
+
+# System
+thumbs.db
+.DS_Store
+
+# Logs
+*.log

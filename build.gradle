@@ -1,0 +1,120 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'dev.modinstall'
+version = '1.0.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.google.code.gson:gson:2.10.1'
+}
+
+application {
+    mainClass = 'dev.modinstall.ModInstall'
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'dev.modinstall.ModInstall'
+    }
+    
+    // Create fat jar with all dependencies
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    archiveFileName = 'modinstall.jar'
+}
+
+task nativeImage(type: Exec) {
+    dependsOn jar
+    workingDir project.projectDir
+    
+    // Output directory
+    def outputDir = "build/native"
+    
+    // Generate ICO file from PNG (Modern Windows support PNG-in-ICO)
+    // This allows us to convert the logo without external tools
+    doFirst {
+        file(outputDir).deleteDir()
+        
+        def pngFile = file('icon.png')
+        def icoFile = file('build/icon.ico')
+        
+        if (pngFile.exists()) {
+            println "Converting icon.png to icon.ico..."
+            def pngBytes = pngFile.bytes
+            def size = pngBytes.length
+            
+            // ICO Header (6 bytes) + Directory Entry (16 bytes)
+            // Header: Reserved(2), Type(2), Count(2)
+            // Entry: W(1), H(1), Colors(1), Res(1), Planes(2), BPP(2), Size(4), Offset(4)
+            def icoHeader = [
+                0, 0,             // Reserved
+                1, 0,             // Type 1 = ICO
+                1, 0,             // Count = 1 image
+                0,                // Width (0 = 256px)
+                0,                // Height (0 = 256px)
+                0,                // Colors (0 = no palette)
+                0,                // Reserved
+                1, 0,             // Planes
+                32, 0,            // BPP
+                size & 0xFF, (size >> 8) & 0xFF, (size >> 16) & 0xFF, (size >> 24) & 0xFF, // Size
+                22, 0, 0, 0       // Offset (6+16 = 22)
+            ] as byte[]
+            
+            icoFile.parentFile.mkdirs()
+            icoFile.withOutputStream { out ->
+                out.write(icoHeader)
+                out.write(pngBytes)
+            }
+        }
+    }
+    
+    // Command line for jpackage
+    // Note: We use the java.home property to find the jpackage executable relative to the current JVM
+    // or assume it's in the PATH if running from a JDK 17+ env.
+    
+    def jpackageCommand = "jpackage"
+    
+    if (org.gradle.internal.os.OperatingSystem.current().isWindows()) {
+        jpackageCommand += ".exe"
+    }
+
+    def args = [
+        '--type', 'app-image',
+        '--dest', outputDir,
+        '--input', 'build/libs',
+        '--name', 'ModInstall',
+        '--main-jar', 'modinstall.jar',
+        '--main-class', 'dev.modinstall.ModInstall',
+        '--win-console'
+    ]
+    
+    if (file('build/icon.ico').exists()) {
+        println "Icon file found, adding to arguments."
+        args += ['--icon', 'build/icon.ico']
+    } else {
+        println "Icon file NOT found at build/icon.ico"
+    }
+    
+    println "JPackage args: " + args
+
+    commandLine = [jpackageCommand] + args
+        
+    doLast {
+        println "Native executable created at: ${outputDir}/ModInstall/ModInstall.exe"
+    }
+}
