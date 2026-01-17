@@ -753,20 +753,54 @@ public class ModInstall {
     }
     
     private String httpGet(String urlString) throws IOException {
-        URL url = new URL(urlString);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestMethod("GET");
-        conn.setRequestProperty("User-Agent", USER_AGENT);
-        conn.setRequestProperty("Accept", "application/json");
+        int maxRetries = 3;
+        int retryDelay = 1000; // 1s start delay
         
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                sb.append(line);
+        for (int i = 0; i <= maxRetries; i++) {
+            try {
+                URL url = new URL(urlString);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setRequestProperty("User-Agent", USER_AGENT);
+                conn.setRequestProperty("Accept", "application/json");
+                
+                int status = conn.getResponseCode();
+                
+                if (status >= 500 && status < 600) {
+                    if (i < maxRetries) {
+                        warning("Modrinth API unavailable (HTTP " + status + "). Retrying in " + (retryDelay / 1000) + "s...");
+                        try { Thread.sleep(retryDelay); } catch (InterruptedException ignored) {}
+                        retryDelay *= 2; // Exponential backoff
+                        continue;
+                    } else {
+                        throw new IOException("Modrinth API is down (HTTP " + status + "). Please try again later.");
+                    }
+                }
+                
+                if (status >= 400) {
+                     throw new IOException("API Error HTTP " + status + " for URL: " + urlString);
+                }
+                
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        sb.append(line);
+                    }
+                    return sb.toString();
+                }
+            } catch (IOException e) {
+                // Only retry on network IO errors or 5xx (handled above)
+                if (i < maxRetries) {
+                    warning("Connection failed (" + e.getMessage() + "). Retrying...");
+                    try { Thread.sleep(retryDelay); } catch (InterruptedException ignored) {}
+                    retryDelay *= 2;
+                } else {
+                     throw e;
+                }
             }
-            return sb.toString();
         }
+        return null; // Should not reach here
     }
     
     // === Formatting Helpers ===
