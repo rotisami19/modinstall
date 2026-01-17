@@ -23,7 +23,14 @@ Goal: Make ModInstall more versatile, robust, and support multiple sources.
   - `modinstall export package.json`
   - `modinstall import package.json`
 
-### 4. Self-Update Tool 🔄
+### 4. Smart List (`modinstall list --check-updates`) 📋
+- **Description**: Display installed mods with an indicator if an update is available.
+- **Details**:
+  - Adds a `--check` or `-c` flag to the `list` command.
+  - Queries Modrinth in the background to compare versions.
+  - Shows `[UPDATE AVAILABLE]` or a specific icon/color next to outdated mods.
+
+### 5. Self-Update Tool 🔄
 - **Description**: The tool can update itself directly from GitHub Releases.
 - **Command**: `modinstall upgrade`
 
